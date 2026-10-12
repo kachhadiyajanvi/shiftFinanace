@@ -1,4 +1,32 @@
-const API_BASE = '/api';
+// Live backend on Render: https://shiftfinanace.onrender.com
+const getApiBase = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim()) {
+    const cleanUrl = envUrl.trim().replace(/\/+$/, '');
+    return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+  }
+  // In local development, fall back to /api for Vite proxy if env var is not specified
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+  // Default to live Render backend in production
+  return 'https://shiftfinanace.onrender.com/api';
+};
+
+const API_BASE = getApiBase();
+
+/**
+ * Quick health ping to wake up Render free tier backend
+ */
+export async function checkHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/health`, { method: 'GET' });
+    return await res.json().catch(() => ({ status: 'online' }));
+  } catch (err) {
+    console.warn('Backend waking up or health check failed:', err.message);
+    return null;
+  }
+}
 
 /**
  * Fetch wrapper that automatically adds Authorization Bearer token
@@ -14,15 +42,25 @@ async function request(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    // If Render backend is sleeping or network is slow
+    const netErr = new Error(
+      'Unable to connect to the server. The live backend may be spinning up (please wait a few seconds) or check your connection.'
+    );
+    netErr.status = 0;
+    throw netErr;
+  }
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const error = new Error(data.message || 'Request failed');
+    const error = new Error(data.message || `Request failed (${response.status})`);
     error.status = response.status;
     error.data = data;
     throw error;

@@ -12,6 +12,7 @@ import { DataProvider } from './context/DataContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Toast from './components/Toast';
+import { checkHealth } from './services/api';
 
 // Pages
 import Home from './pages/Home';
@@ -52,6 +53,11 @@ function PublicRoute({ children }) {
 }
 
 function AppContent() {
+  useEffect(() => {
+    // Ping Render backend in background so it starts warming up immediately
+    checkHealth();
+  }, []);
+
   return (
     <>
       <ScrollToTop />
